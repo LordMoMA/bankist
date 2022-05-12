@@ -4,12 +4,24 @@
 /////////////////////////////////////////////////
 // BANKIST APP
 
-// Data
 const account1 = {
   owner: 'Jonas Schmedtmann',
-  movements: [200, 450, -400, 3000, -650, -130, 70, 1300],
+  movements: [200, 455.23, -306.5, 25000, -642.21, -133.9, 79.97, 1300],
   interestRate: 1.2, // %
   pin: 1111,
+
+  movementsDates: [
+    '2019-11-18T21:31:17.178Z',
+    '2019-12-23T07:42:02.383Z',
+    '2020-01-28T09:15:04.904Z',
+    '2020-04-01T10:17:24.185Z',
+    '2020-05-08T14:11:59.604Z',
+    '2020-05-27T17:01:17.194Z',
+    '2020-07-11T23:36:17.929Z',
+    '2020-07-12T10:51:36.790Z',
+  ],
+  currency: 'EUR',
+  locale: 'pt-PT', // de-DE
 };
 
 const account2 = {
@@ -17,23 +29,22 @@ const account2 = {
   movements: [5000, 3400, -150, -790, -3210, -1000, 8500, -30],
   interestRate: 1.5,
   pin: 2222,
+
+  movementsDates: [
+    '2019-11-01T13:15:33.035Z',
+    '2019-11-30T09:48:16.867Z',
+    '2019-12-25T06:04:23.907Z',
+    '2020-01-25T14:18:46.235Z',
+    '2020-02-05T16:33:06.386Z',
+    '2020-04-10T14:43:26.374Z',
+    '2020-06-25T18:49:59.371Z',
+    '2020-07-26T12:01:20.894Z',
+  ],
+  currency: 'USD',
+  locale: 'en-US',
 };
 
-const account3 = {
-  owner: 'Steven Thomas Williams',
-  movements: [200, -200, 340, -300, -20, 50, 400, -460],
-  interestRate: 0.7,
-  pin: 3333,
-};
-
-const account4 = {
-  owner: 'Sarah Smith',
-  movements: [430, 1000, 700, 50, 90],
-  interestRate: 1,
-  pin: 4444,
-};
-
-const accounts = [account1, account2, account3, account4];
+const accounts = [account1, account2];
 
 // Elements
 const labelWelcome = document.querySelector('.welcome');
@@ -61,20 +72,50 @@ const inputLoanAmount = document.querySelector('.form__input--loan-amount');
 const inputCloseUsername = document.querySelector('.form__input--user');
 const inputClosePin = document.querySelector('.form__input--pin');
 
-const displayMovements = function (movements, sort = false) {
+const formatMovementDate = function (date, locale) {
+  const calcDaysPassed = (date1, date2) =>
+    Math.round(Math.abs(date2 - date1) / (1000 * 60 * 60 * 24));
+
+  const daysPassed = calcDaysPassed(new Date(), date);
+
+  if (daysPassed === 0) return 'Today';
+  if (daysPassed === 1) return 'Yesterday';
+  if (daysPassed <= 0) return `${daysPassed} days ago`;
+
+  //   const day = `${date.getDate()}`.padStart(2, 0);
+  //   const month = `${date.getMonth() + 1}`.padStart(2, 0);
+  //   const year = date.getFullYear();
+  //   return `${day}/${month}/${year}`;
+  return new Intl.DateTimeFormat(locale).format(date);
+};
+
+const formatCur = function (value, locale, currency) {
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: currency,
+  }).format(value);
+};
+
+const displayMovements = function (acc, sort = false) {
   containerMovements.innerHTML = '';
 
-  const movs = sort ? movements.slice().sort((a, b) => a - b) : movements;
+  const movs = sort
+    ? acc.movements.slice().sort((a, b) => a - b)
+    : acc.movements;
 
   movs.forEach(function (mov, i) {
     const type = mov > 0 ? 'deposit' : 'withdrawal';
+    const date = new Date(acc.movementsDates[i]);
+    const displayDate = formatMovementDate(date, acc.locale);
+    const formattedMov = formatCur(mov, acc.locale, acc.currency);
 
     const html = `
         <div class="movements__row">
           <div class="movements__type movements__type--${type}">${
       i + 1
     }${type}</div>
-          <div class="movements__value">${mov}$</div>
+          <div class="movements__date">${displayDate}</div>
+          <div class="movements__value">${formattedMov}</div>
         </div>
         `;
 
@@ -84,27 +125,33 @@ const displayMovements = function (movements, sort = false) {
 
 const calcDisplayBalance = function (acc) {
   acc.balance = acc.movements.reduce((acc, mov) => acc + mov, 0);
-  labelBalance.textContent = `${acc.balance} $`;
+  labelBalance.textContent = formatCur(acc.balance, acc.locale, acc.currency);
 };
 
 const calcDisplaySummary = function (acc) {
   const incomes = acc.movements
     .filter(mov => mov > 0)
     .reduce((acc, cur) => acc + cur, 0);
-  labelSumIn.textContent = `${incomes}$`;
+  labelSumIn.textContent = formatCur(incomes, acc.locale, acc.currency);
 
   const outflows = acc.movements
     .filter(mov => mov < 0)
     .reduce((acc, cur) => acc + cur, 0);
-  labelSumOut.textContent = `${Math.abs(outflows)}$`;
+  labelSumOut.textContent = formatCur(
+    Math.abs(outflows),
+    acc.locale,
+    acc.currency
+  );
 
   const interests = acc.movements
     .filter(mov => mov > 0)
     .map(deposit => (deposit * acc.interestRate) / 100)
-    .filter(int => int > 1)
+    .filter((int, i, arr) => {
+      return int >= 1;
+    })
     .reduce((acc, cur) => acc + cur, 0);
 
-  labelSumInterest.textContent = `${interests}$`;
+  labelSumInterest.textContent = formatCur(interests, acc.locale, acc.currency);
 };
 
 const createUserNames = function (accts) {
@@ -122,7 +169,8 @@ createUserNames(accounts);
 
 const updateUI = function (acc) {
   // display movements
-  displayMovements(acc.movements);
+  displayMovements(acc);
+
   //display balance
   calcDisplayBalance(acc);
 
@@ -130,8 +178,38 @@ const updateUI = function (acc) {
   calcDisplaySummary(acc);
 };
 
+const startLogOutTimer = function () {
+  const tick = function () {
+    const min = String(Math.trunc(time / 60)).padStart(2, 0);
+    const sec = String(time % 60).padStart(2, 0);
+    //in each call, print the remaining time to UI
+    labelTimer.textContent = `${min} :${sec}`;
+
+    //when 0 sec, stop timer and log out user
+    if (time === 0) {
+      clearInterval(timer);
+      labelWelcome.textContent = 'Log in to get started';
+      containerApp.style.opacity = 0;
+    }
+    // decrease 1 sec
+    time--;
+  };
+
+  // set timer to 5min
+  let time = 120;
+  //call the timer every second
+  tick();
+  const timer = setInterval(tick, 1000);
+  return timer;
+};
+
 //Event Handler
-let currentAccount;
+let currentAccount, timer;
+
+// // FAKE ALWAYS LOGGED IN
+// currentAccount = account1;
+// updateUI(currentAccount);
+// containerApp.style.opacity = 100;
 
 btnLogin.addEventListener('click', function (e) {
   //prevent form from submitting
@@ -143,23 +221,58 @@ btnLogin.addEventListener('click', function (e) {
 
   console.log(currentAccount);
 
-  if (currentAccount?.pin === Number(inputLoginPin.value)) {
+  if (currentAccount?.pin === +inputLoginPin.value) {
     // display UI and message
     labelWelcome.textContent = `Welcome back, ${
       currentAccount.owner.split(' ')[0]
     }`;
     containerApp.style.opacity = 100;
 
+    //create current date and time
+    // experimenting API
+    const now = new Date();
+    const options = {
+      hour: 'numeric',
+      minute: 'numeric',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      weekday: 'long',
+    };
+
+    // const locale = navigator.language;
+
+    // console.log(locale);
+
+    labelDate.textContent = new Intl.DateTimeFormat(
+      currentAccount.locale,
+      options
+    ).format(now);
+
+    // const now = new Date();
+    // const day = `${now.getDate()}`.padStart(2, 0);
+    // const month = `${now.getMonth() + 1}`.padStart(2, 0);
+    // const year = now.getFullYear();
+    // const hour = `${now.getHours()}`.padStart(2, 0);
+    // const min = `${now.getMinutes()}`.padStart(2, 0);
+    // labelDate.textContent = `${day}/${month}/${year}, ${hour}: ${min}`;
+
     // clear input fields
     inputLoginUsername.value = inputLoginPin.value = '';
     inputLoginPin.blur();
+
+    // timer
+    if (timer) clearInterval(timer);
+
+    timer = startLogOutTimer();
+
     updateUI(currentAccount);
   }
 });
 
 btnTransfer.addEventListener('click', function (e) {
   e.preventDefault();
-  const amount = Number(inputTransferAmount.value);
+  const amount = +inputTransferAmount.value;
   const receiverAcc = accounts.find(
     acc => acc.username === inputTransferTo.value
   );
@@ -174,20 +287,52 @@ btnTransfer.addEventListener('click', function (e) {
     // doing the transfer
     currentAccount.movements.push(-amount);
     receiverAcc.movements.push(amount);
+
+    //add transfer date
+    currentAccount.movementsDates.push(new Date().toISOString());
+    receiverAcc.movementsDates.push(new Date().toISOString());
+    // update UI
     updateUI(currentAccount);
+
+    //reset timer
+    clearInterval(timer);
+    timer = startLogOutTimer();
   }
 });
 
+btnLoan.addEventListener('click', function (e) {
+  e.preventDefault();
+
+  const amount = Math.floor(inputLoanAmount.value);
+
+  if (amount > 0 && currentAccount.movements.some(mov => mov >= amount * 0.1)) {
+    setTimeOut(function () {
+      // add movement
+      currentAccount.movements.push(amount);
+      //add loan date
+      currentAccount.movementsDates.push(new Date().toISOString());
+      // update UI
+      updateUI(currentAccount);
+      //reset timer
+      clearInterval(timer);
+      timer = startLogOutTimer();
+    }, 2500);
+  }
+
+  inputLoanAmount.value = '';
+});
+
 btnClose.addEventListener('click', function (e) {
-  e.defaultPrevented();
+  e.preventDefault();
 
   if (
     inputCloseUsername.value === currentAccount.username &&
-    Number(inputClosePin.value) === currentAccount.pin
+    +inputClosePin.value === currentAccount.pin
   ) {
     const index = accounts.findIndex(
-      acc => (acc.username = currentAccount.username)
+      acc => acc.username === currentAccount.username
     );
+    console.log(index);
     // delete account
     accounts.splice(index, 1);
 
@@ -195,19 +340,6 @@ btnClose.addEventListener('click', function (e) {
     containerApp.style.opacity = 0;
   }
   inputCloseUsername.value = inputClosePin.value = '';
-});
-
-btnLoan.addEventListener('click', function (e) {
-  e.defaultPrevented();
-  const amount = Number(inputLoanAmount.value);
-  if (amount > 0 && currentAccount.movements.some(mov => mov >= amount * 0.1)) {
-    // add movement
-    currentAccount.movements.push(amount);
-    // update UI
-    updateUI(currentAccount);
-  }
-
-  inputLoanAmount.value = '';
 });
 
 let sorted = false;
@@ -218,256 +350,14 @@ btnSort.addEventListener('click', function (e) {
   sorted = !sorted;
 });
 
-// const account = accounts.find(acc => acc.owner === 'Jessica Davis');
-// console.log(account);
-
-// for (const acc of accounts) {
-//     if acc.owner === 'Jonas Schmedtmann'
-//     console.log(acc);
-// }
-
-// const movements = [200, 450, -400, 3000, -650, -130, 70, 1300];
-
-// const max = movements.reduce((acc, mov) => {
-//     if (acc > mov) return acc;
-//     else return mov;
-// }, );
-// console.log(max);
-
 /////////////////////////////////////////////////
 /////////////////////////////////////////////////
 // LECTURES
-// const currencies = new Map([
-//     ['USD', 'United States dollar'],
-//     ['EUR', 'Euro'],
-//     ['GBP', 'Pound sterling'],
-// ]);
 
-// const movements = [200, 450, -400, 3000, -650, -130, 70, 1300];
+// const calcDaysPassed = (date1, date2) =>
+//   Math.abs(date2 - date1) / (1000 * 60 * 60 * 24);
 
-// /////////////////////////////////////////////////
-// console.log('---- FOREACH ----');
-// movements.forEach(function(mov, i) {
-//     if (mov > 0) {
-//         console.log(`Movement ${i + 1}: You deposited ${mov}`);
-//     } else {
-//         console.log(`Movement ${i + 1}: You withdrew ${Math.abs(mov)}`);
-
-//     }
-// });
-// const movements = [200, 450, -400, 3000, -650, -130, 70, 1300];
-// const eurToUsd = 1.1;
-
-// let dogsJulia = [3, 5, 2, 12, 7];
-// let dogsKate = [4, 1, 15, 8, 3];
-
-// const checkDogs = function(dogsJulia, dogsKate) {
-//     const dogsJuliaCorrect = dogsJulia.slice(1, -2);
-//     const dogsCorrect = dogsJuliaCorrect.concat(dogsKate);
-//     dogsCorrect.forEach(function(age, i) {
-//         if (age >= 3) {
-//             console.log(`Dog number ${i+1} is an adult, and is ${age} years old`);
-//         } else {
-//             console.log(`Dog number ${i+1} is still a puppy 🐶`);
-//         }
-//     });
-// };
-
-// // checkDogs(dogsJulia, dogsKate);
-
-// let ages1 = [5, 2, 4, 1, 15, 8, 3];
-// let ages2 = [16, 6, 10, 5, 6, 1, 4];
-
-// const calcAverageHumanAge = function(ages) {
-//     avgAge = ages.map(age => age <= 2 ? 2 * age : 16 + age * 4).filter(age => age >= 18).reduce((acc, age, i, arr) => (acc + age) / arr.length, 0)
-
-//     const humanAge = ages.map(age => age <= 2 ? 2 * age : 16 + age * 4);
-//     const ageAbove18 = humanAge.filter(age => age >= 18);
-//     const avgAge = ageAbove18.reduce((acc, age) => acc + age, 0) / ageAbove18.length;
-//     return avgAge;
-
-// }
-
-// console.log(calcAverageHumanAge(ages1));
-// console.log(calcAverageHumanAge(ages2));
-
-// const calcAverageHumanAge = function(ages) {
-//     const humanAges = ages.map(age => (age <= 2 ? 2 * age : 16 + age * 4));
-//     const adults = humanAges.filter(age => age >= 18);
-//     console.log(humanAges);
-//     console.log(adults);
-
-//     // const average = adults.reduce((acc, age) => acc + age, 0) / adults.length;
-
-//     const average = adults.reduce(
-//         (acc, age, i, arr) => acc + age / arr.length,
-//         0
-//     );
-
-//     // 2 3. (2+3)/2 = 2.5 === 2/2+3/2 = 2.5
-
-//     return average;
-// };
-// const avg1 = calcAverageHumanAge([5, 2, 4, 1, 15, 8, 3]);
-// const avg2 = calcAverageHumanAge([16, 6, 10, 5, 6, 1, 4]);
-// console.log(avg1, avg2);
-
-// // const movementsUSD = movements.map(function (mov) {
-// //   return mov * eurToUsd;
-// // });
-
-// const movementsUSD = movements.map(mov => mov * eurToUsd);
-
-// console.log(movements);
-// console.log(movementsUSD);
-
-// const movementsUSDfor = [];
-// for (const mov of movements) movementsUSDfor.push(mov * eurToUsd);
-// console.log(movementsUSDfor);
-
-// const movementsDescriptions = movements.map(
-//     (mov, i) =>
-//     `Movement ${i + 1}: You ${mov > 0 ? 'deposited' : 'withdrew'} ${Math.abs(
-//       mov
-//     )}`
-// );
-// console.log(movementsDescriptions);
-
-// 1. how much has been deposited in total in the bank
-
-const deposited = accounts
-  .flatMap(cur => cur.movements)
-  .filter(cur => cur > 0)
-  .reduce((acc, cur) => acc + cur, 0);
-
-// const deposited = accounts
-//   .flatMap(cur => cur.movements)
-//   .reduce((sum, cur) => (cur > 0 ? sum + cur : sum), 0);
-
-// console.log(deposited);
-
-// 2. how many deposits in the bank > 1000
-
-const numOfDeposit = accounts
-  .flatMap(acc => acc.movements)
-  .filter(cur => cur >= 1000).length;
-
-// console.log(numOfDeposit);
-
-const num2 = accounts
-  .flatMap(acc => acc.movements)
-  .reduce((count, cur) => (cur >= 1000 ? count + 1 : count), 0);
-
-// console.log(num2);
-
-// 3; // create an object which contains the sum of deposits and withdrawals
-
-const objectSum = accounts
-  .flatMap(acc => acc.movements)
-  .reduce(
-    (sums, cur) => {
-      //   cur > 0 ? (sums.deposits += cur) : (sums.withdrawals += cur);
-      sums[cur > 0 ? 'deposits' : 'withdrawals'] += cur;
-      return sums;
-    },
-    { deposits: 0, withdrawals: 0 }
-  );
-
-// console.log(objectSum);
-
-//4 convert a title case, this is a nice title => This Is a Nice Title
-/* 
-Julia and Kate are still studying dogs, and this time they are studying if dogs are eating too much or too little.
-Eating too much means the dog's current food portion is larger than the recommended portion, and eating too little is the opposite.
-Eating an okay amount means the dog's current food portion is within a range 10% above and 10% below the recommended portion (see hint).
-
-1. Loop over the array containing dog objects, and for each dog, calculate the recommended food portion and add it to the object as a new property. Do NOT create a new array, simply loop over the array. Forumla: recommendedFood = weight ** 0.75 * 28. (The result is in grams of food, and the weight needs to be in kg)
-2. Find Sarah's dog and log to the console whether it's eating too much or too little. HINT: Some dogs have multiple owners, so you first need to find Sarah in the owners array, and so this one is a bit tricky (on purpose) 🤓
-3. Create an array containing all owners of dogs who eat too much ('ownersEatTooMuch') and an array with all owners of dogs who eat too little ('ownersEatTooLittle').
-4. Log a string to the console for each array created in 3., like this: "Matilda and Alice and Bob's dogs eat too much!" and "Sarah and John and Michael's dogs eat too little!"
-5. Log to the console whether there is any dog eating EXACTLY the amount of food that is recommended (just true or false)
-6. Log to the console whether there is any dog eating an OKAY amount of food (just true or false)
-7. Create an array containing the dogs that are eating an OKAY amount of food (try to reuse the condition used in 6.)
-8. Create a shallow copy of the dogs array and sort it by recommended food portion in an ascending order (keep in mind that the portions are inside the array's objects)
-
-HINT 1: Use many different tools to solve these challenges, you can use the summary lecture to choose between them 😉
-HINT 2: Being within a range 10% above and below the recommended portion means: current > (recommended * 0.90) && current < (recommended * 1.10). Basically, the current portion should be between 90% and 110% of the recommended portion.
-*/
-const dogs = [
-  { weight: 22, curFood: 250, owners: ['Alice', 'Bob'] },
-  { weight: 8, curFood: 200, owners: ['Matilda'] },
-  { weight: 13, curFood: 275, owners: ['Sarah', 'John'] },
-  { weight: 32, curFood: 340, owners: ['Michael'] },
-];
-
-// for (const dog of dogs) {
-//   const recommendedFood = dog.weight ** 0.75 * 28;
-//   //   console.log(recommendedFood);
-// }
-
-// 1.
-dogs.forEach(dog => (dog.recommendedFood = dog.weight ** 0.75 * 28));
-console.log(dogs);
-// 2
-const sarahDog = dogs.find(dog => dog.owners.includes('Sarah'));
-
-console.log(sarahDog);
-
-if (sarahDog.curFood > 1.1 * sarahDog.recommendedFood) {
-  console.log('Too much!');
-} else if (sarahDog.curFood < 0.9 * sarahDog.recommendedFood) {
-  console.log('Too little!');
-} else {
-  console.log('Just all right!');
-}
-// 3.
-const ownersEatTooMuch = dogs
-  .filter(dog => dog.curFood > 1.1 * dog.recommendedFood)
-  .flatMap(dog => dog.owners);
-console.log(ownersEatTooMuch);
-
-const ownersEatTooLittle = dogs
-  .filter(dog => dog.curFood < 0.9 * dog.recommendedFood)
-  .flatMap(dog => dog.owners);
-console.log(ownersEatTooLittle);
-
-// 4
-console.log(
-  ownersEatTooMuch.toString().replaceAll(',', ' and ') + "'s dogs eat too much!"
-);
-console.log(
-  ownersEatTooLittle.toString().replaceAll(',', ' and ') +
-    "'s dogs eat too little!"
-);
-
-// 5
-
-const checkExact = dogs.some(dog => dog.curFood === dog.recommendedFood);
-
-console.log(checkExact);
-
-// 6
-
-const checkNormal = dogs.some(
-  dog =>
-    dog.curFood >= 0.9 * dog.recommendedFood &&
-    dog.curFood <= 1.1 * dog.recommendedFood
-);
-console.log(checkNormal);
-
-// 7.
-const okayAmount = checkNormal
-  ? dogs.filter(
-      dog =>
-        dog.curFood >= 0.9 * dog.recommendedFood &&
-        dog.curFood <= 1.1 * dog.recommendedFood
-    )
-  : 'nothing';
-
-console.log(okayAmount);
-
-// 8.
-const copyDogs = dogs
-  .slice()
-  .sort((a, b) => a.recommendedFood - b.recommendedFood);
-console.log(copyDogs);
+// setInterval(function () {
+//   const now = new Date();
+//   console.log(now);
+// }, 1000);
